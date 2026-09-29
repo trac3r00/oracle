@@ -435,6 +435,30 @@ describe("Deep Research iframe helpers", () => {
     });
   });
 
+  it("reads a finished report from the mcp-app sandbox's nested frame", () => {
+    const expression = buildDeepResearchFrameStatusExpressionForTest();
+    const nested = {
+      body: {
+        innerText:
+          "Research completed in 5m ·\n12\n citations ·\n30\n searches\nTallest Building Completed in 2026\nCity Tower One in Dubai is the tallest verified 2026 completion.",
+        innerHTML: "<article />",
+      },
+      querySelectorAll: () => [],
+    };
+    const result = new vm.Script(expression).runInNewContext({
+      document: {
+        body: { innerText: "", innerHTML: "<iframe></iframe>" },
+        querySelector: (selector: string) =>
+          selector === "iframe" ? { contentDocument: nested } : null,
+        querySelectorAll: () => [],
+      },
+    }) as { completed?: boolean; text?: string };
+
+    expect(result.completed).toBe(true);
+    expect(result.text).toContain("City Tower One in Dubai");
+    expect(result.text).not.toContain("citations");
+  });
+
   it("does not treat the editable countdown plan as research already running", () => {
     const expression = buildDeepResearchFrameStatusExpressionForTest();
     const editButton = { textContent: "Edit", getAttribute: () => null };

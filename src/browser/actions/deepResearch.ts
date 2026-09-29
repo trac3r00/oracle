@@ -977,7 +977,10 @@ function isConfirmedDeepResearchTarget(
 function isDeepResearchFrameDescriptor(url: string, name = ""): boolean {
   const descriptor = `${url}\n${name}`.toLowerCase();
   return (
-    descriptor.includes("connector_openai_deep_research") || descriptor.includes("deep-research")
+    descriptor.includes("connector_openai_deep_research") ||
+    descriptor.includes("deep-research") ||
+    // ChatGPT 2026-09 renders Deep research as a plugin app in an mcp-app sandbox.
+    (descriptor.includes("mcp-app-") && descriptor.includes(".web-sandbox.oaiusercontent.com"))
   );
 }
 
@@ -1024,11 +1027,14 @@ function collectDeepResearchFrameIds(tree: DeepResearchFrameTree | undefined): s
 
 function buildDeepResearchFrameStatusExpression(): string {
   return `(() => {
-    const rawText = document.body?.innerText || '';
-    const html = document.body?.innerHTML || '';
+    // The mcp-app sandbox renders the report in a nested same-origin about:blank frame.
+    const nested = (() => { try { return document.querySelector('iframe')?.contentDocument ?? null; } catch { return null; } })();
+    const doc = (document.body?.innerText || '').trim() || !nested?.body ? document : nested;
+    const rawText = doc.body?.innerText || '';
+    const html = doc.body?.innerHTML || '';
     const cleanText = (value) => String(value || '').replace(/\\s+/g, ' ').trim();
-    const sections = typeof document.querySelectorAll === 'function'
-      ? Array.from(document.querySelectorAll('section'))
+    const sections = typeof doc.querySelectorAll === 'function'
+      ? Array.from(doc.querySelectorAll('section'))
       : [];
     const planSection = sections.find((section) => {
       if (typeof section.querySelector !== 'function' ||
