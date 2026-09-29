@@ -928,7 +928,11 @@ export function throwIfAssistantUiError(snapshot: AssistantSnapshot | null): voi
 }
 
 function isGeneratedImageAssistantAnswer(answer: { html?: string } | null): boolean {
-  return Boolean(answer?.html?.includes("/backend-api/estuary/content?id=file_"));
+  const html = answer?.html ?? "";
+  return (
+    html.includes("/backend-api/estuary/content?id=file_") ||
+    html.includes('data-testid="generated-image-gallery"')
+  );
 }
 
 async function waitForCondition<T>(
@@ -1148,7 +1152,8 @@ function buildResponseObserverExpression(
     };
 
     const waitForSettle = async (snapshot) => {
-      if (String(snapshot?.html ?? '').includes('/backend-api/estuary/content?id=file_')) {
+      const snapshotHtml = String(snapshot?.html ?? '');
+      if (snapshotHtml.includes('/backend-api/estuary/content?id=file_') || snapshotHtml.includes('data-testid="generated-image-gallery"')) {
         return snapshot;
       }
       // Learned: short answers can be 1-2 tokens; enforce longer settle windows to avoid truncation.
@@ -1306,7 +1311,10 @@ function buildAssistantExtractor(functionName: string): string {
       const messageId = messageRoot.getAttribute('data-message-id');
       const turnId = messageRoot.getAttribute('data-testid');
       const generatedImages = Array.from(messageRoot.querySelectorAll('img')).filter((img) =>
-        String(img?.src || '').includes('/backend-api/estuary/content?id=file_')
+        String(img?.src || '').includes('/backend-api/estuary/content?id=file_') ||
+        (String(img?.src || '').startsWith('blob:') &&
+          (String(img?.alt || '').toLowerCase().startsWith('generated image') ||
+            Boolean(img.closest?.('[data-testid="generated-image-gallery"]'))))
       );
       const normalizedText = String(text || '').toLowerCase().replace(/\\s+/g, ' ').trim();
       const retryVisible = Array.from(turn.querySelectorAll('button, [role="button"]')).some((button) => {

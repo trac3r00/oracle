@@ -94,13 +94,41 @@ function buildAssistantImageExpression(minTurnIndex?: number): string {
       }
       return false;
     };
-    const serializeImages = (root) =>
-      Array.from(root.querySelectorAll('img')).filter(isGeneratedImage).map((img) => ({
-        url: img.src || '',
-        alt: img.alt || '',
-        width: img.naturalWidth || 0,
-        height: img.naturalHeight || 0,
-      }));
+    // Current ChatGPT renders generated images from blob: URLs; the file URL they were
+    // loaded from is only visible in the page's resource timeline, in load order.
+    const loadedFileUrls = (() => {
+      const byId = new Map();
+      for (const entry of performance.getEntriesByType?.('resource') ?? []) {
+        try {
+          const url = new URL(entry.name);
+          const id = url.searchParams.get('id') || '';
+          if (url.pathname === '/backend-api/estuary/content' && id.startsWith('file_') && !byId.has(id)) {
+            byId.set(id, url.href);
+          }
+        } catch {}
+      }
+      return Array.from(byId.values());
+    })();
+    const isBlobGeneratedImage = (img) =>
+      String(img?.src || '').startsWith('blob:') &&
+      (String(img.alt || '').toLowerCase().startsWith('generated image') ||
+        Boolean(img.closest?.('[data-testid="generated-image-gallery"]')));
+    const describe = (img, url) => ({
+      url,
+      alt: img.alt || '',
+      width: img.naturalWidth || 0,
+      height: img.naturalHeight || 0,
+    });
+    const serializeNodes = (imgs) => {
+      const direct = imgs.filter(isGeneratedImage).map((img) => describe(img, img.src || ''));
+      const blobs = imgs.filter(isBlobGeneratedImage);
+      const files = loadedFileUrls.slice(-blobs.length);
+      const mapped = blobs.length && files.length === blobs.length
+        ? blobs.map((img, index) => describe(img, files[index]))
+        : [];
+      return [...direct, ...mapped];
+    };
+    const serializeImages = (root) => serializeNodes(Array.from(root.querySelectorAll('img')));
     const isAssistantTurn = (node) => {
       if (!(node instanceof HTMLElement)) return false;
       const turnAttr = (node.getAttribute('data-turn') || node.dataset?.turn || '').toLowerCase();
@@ -124,18 +152,12 @@ function buildAssistantImageExpression(minTurnIndex?: number): string {
       MIN_TURN_INDEX > 0 && turns.length > 0
         ? turns[Math.min(MIN_TURN_INDEX - 1, turns.length - 1)]
         : null;
-    return Array.from(document.querySelectorAll('img'))
-      .filter(isGeneratedImage)
-      .filter((img) => {
+    return serializeNodes(
+      Array.from(document.querySelectorAll('img')).filter((img) => {
         if (!boundary) return true;
         return Boolean(boundary.compareDocumentPosition(img) & Node.DOCUMENT_POSITION_FOLLOWING);
-      })
-      .map((img) => ({
-        url: img.src || '',
-        alt: img.alt || '',
-        width: img.naturalWidth || 0,
-        height: img.naturalHeight || 0,
-      }));
+      }),
+    );
   })()`;
 }
 
