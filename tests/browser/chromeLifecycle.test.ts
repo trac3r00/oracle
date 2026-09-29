@@ -172,9 +172,29 @@ describe("hidden-window launch flags", () => {
 
     if (process.platform === "darwin") {
       expect(flags).toContain("--window-position=-32000,-32000");
+      // A startup window would activate Chrome and steal keyboard focus.
+      expect(flags).toContain("--no-startup-window");
     } else {
       expect(flags).not.toContain("--window-position=-32000,-32000");
+      expect(flags).not.toContain("--no-startup-window");
     }
+  });
+
+  test("only hidden, headed macOS launches skip the startup window", async () => {
+    const { launchesWithoutStartupWindowForTest } =
+      await import("../../src/browser/chromeLifecycle.js");
+    expect(
+      launchesWithoutStartupWindowForTest({ hideWindow: true, headless: false }, "darwin"),
+    ).toBe(true);
+    expect(
+      launchesWithoutStartupWindowForTest({ hideWindow: false, headless: false }, "darwin"),
+    ).toBe(false);
+    expect(
+      launchesWithoutStartupWindowForTest({ hideWindow: true, headless: true }, "darwin"),
+    ).toBe(false);
+    expect(
+      launchesWithoutStartupWindowForTest({ hideWindow: true, headless: false }, "linux"),
+    ).toBe(false);
   });
 
   test("adds the headless launch flag without an off-screen window position", async () => {

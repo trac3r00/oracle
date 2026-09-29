@@ -76,9 +76,87 @@ export async function launchChrome(
   if (detachSharedChrome) {
     logger("[browser] Browser control: Windows Chrome lifecycle detached=true; windowsHide=true.");
   }
+  if (launchesWithoutStartupWindow(config)) {
+    await openBackgroundStartupWindow(connectHost ?? "127.0.0.1", launcher.port, logger);
+  }
   return Object.assign(launcher, { host: connectHost ?? "127.0.0.1" }) as LaunchedChrome & {
     host?: string;
   };
+}
+
+function launchesWithoutStartupWindow(
+  config: Pick<ResolvedBrowserConfig, "headless" | "hideWindow">,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform === "darwin" && !config.headless && Boolean(config.hideWindow);
+}
+
+/**
+ * macOS Chrome activates itself (becomes the frontmost app and takes keyboard focus)
+ * when it opens its startup window, even when that window is positioned off-screen.
+ * Hidden launches therefore start without a window, and Oracle opens the first one
+ * through DevTools as a background window, which never activates the application.
+ * Oracle tabs then open in their own background windows (see connectWithNewTab).
+ */
+async function openBackgroundStartupWindow(
+  host: string,
+  port: number,
+  logger: BrowserLogger,
+): Promise<void> {
+  try {
+    await createBackgroundWindowTarget(host, port, "about:blank");
+    logger("Opened background off-screen Chrome window");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger(`Failed to open background Chrome window (${message}); the first tab will open one.`);
+  }
+}
+
+/**
+ * Opens `url` as the only tab of a new off-screen window without activating Chrome. Being
+ * the active tab of its own window keeps the page visible, so trusted input never needs
+ * Page.bringToFront (which activates Chrome on macOS), even with concurrent Oracle tabs.
+ */
+async function createBackgroundWindowTarget(
+  host: string,
+  port: number,
+  url: string,
+): Promise<string> {
+  const version = await CDP.Version({ host, port });
+  const browser = (await CDP({
+    target: version.webSocketDebuggerUrl,
+    local: true,
+  })) as ChromeClient;
+  try {
+    const { targetId } = await browser.Target.createTarget({
+      url,
+      newWindow: true,
+      background: true,
+      left: -32_000,
+      top: -32_000,
+      width: 1280,
+      height: 720,
+    });
+    return targetId;
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+}
+
+export const launchesWithoutStartupWindowForTest = launchesWithoutStartupWindow;
+
+/**
+ * Whether a hidden run may open its tab in a fresh off-screen window. That window's bounds
+ * must never be recorded as the visible placement, so this requires the placement to have
+ * been recorded already (every hidden launch records it before starting Chrome).
+ */
+export async function shouldOpenTabInBackgroundWindow(
+  config: Pick<ResolvedBrowserConfig, "headless" | "hideWindow">,
+  userDataDir: string,
+): Promise<boolean> {
+  return (
+    launchesWithoutStartupWindow(config) && (await readSavedChromeWindowState(userDataDir)) !== null
+  );
 }
 
 function shouldDetachSharedChrome(
@@ -787,9 +865,12 @@ async function connectToNewTarget(
   url: string,
   logger: BrowserLogger,
   messages: TargetConnectMessages,
+  backgroundWindow = false,
 ): Promise<{ client: ChromeClient; targetId: string } | null> {
   try {
-    const target = await CDP.New({ host, port, url });
+    const target = backgroundWindow
+      ? { id: await createBackgroundWindowTarget(host, port, url) }
+      : await CDP.New({ host, port, url });
     try {
       const client = await CDP({ host, port, target: target.id });
       if (messages.opened) {
@@ -930,7 +1011,13 @@ export async function connectWithNewTab(
   logger: BrowserLogger,
   initialUrl?: string,
   host?: string,
-  options?: { fallbackToDefault?: boolean; retries?: number; retryDelayMs?: number },
+  options?: {
+    fallbackToDefault?: boolean;
+    retries?: number;
+    retryDelayMs?: number;
+    /** Open the tab in its own background off-screen window (hidden macOS launches). */
+    backgroundWindow?: boolean;
+  },
 ): Promise<IsolatedTabConnection> {
   const effectiveHost = host ?? "127.0.0.1";
   const url = initialUrl ?? "about:blank";
@@ -943,14 +1030,22 @@ export async function connectWithNewTab(
 
   let attempt = 0;
   while (attempt <= retries) {
-    const targetConnection = await connectToNewTarget(effectiveHost, port, url, logger, {
-      opened: (targetId) => `Opened isolated browser tab (target=${targetId})`,
-      openFailed: (message) => `Failed to open isolated browser tab (${message}); ${fallbackLabel}`,
-      attachFailed: (targetId, message) =>
-        `Failed to attach to isolated browser tab ${targetId} (${message}); ${fallbackLabel}`,
-      closeFailed: (targetId, message) =>
-        `Failed to close unused browser tab ${targetId}: ${message}`,
-    });
+    const targetConnection = await connectToNewTarget(
+      effectiveHost,
+      port,
+      url,
+      logger,
+      {
+        opened: (targetId) => `Opened isolated browser tab (target=${targetId})`,
+        openFailed: (message) =>
+          `Failed to open isolated browser tab (${message}); ${fallbackLabel}`,
+        attachFailed: (targetId, message) =>
+          `Failed to attach to isolated browser tab ${targetId} (${message}); ${fallbackLabel}`,
+        closeFailed: (targetId, message) =>
+          `Failed to close unused browser tab ${targetId}: ${message}`,
+      },
+      options?.backgroundWindow ?? false,
+    );
     if (targetConnection) {
       return targetConnection;
     }
@@ -1181,7 +1276,9 @@ function buildChromeFlags(
     // Cmd-H stops macOS Chrome from compositing the page, which can swallow
     // trusted CDP clicks and retain the prompt as a draft. Keeping the window
     // off-screen avoids desktop disruption while preserving normal rendering.
-    flags.push("--window-position=-32000,-32000");
+    // --no-startup-window: opening a startup window activates Chrome and steals
+    // keyboard focus; launchChrome opens a background window over DevTools instead.
+    flags.push("--window-position=-32000,-32000", "--no-startup-window");
   }
 
   // Opt-in only: container/CI Chromium often cannot use the sandbox. Callers must

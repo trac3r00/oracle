@@ -898,13 +898,51 @@ describe("promptComposer", () => {
     }
   });
 
+  test("does not activate an already-visible target before a trusted click", async () => {
+    vi.useFakeTimers();
+    try {
+      const runtime = {
+        evaluate: vi.fn(async ({ expression }: { expression: string }) => ({
+          result: {
+            value:
+              expression === "document.visibilityState"
+                ? "visible"
+                : { status: "point", x: 10, y: 20 },
+          },
+        })),
+      };
+      const input = { dispatchMouseEvent: vi.fn(async () => undefined) };
+      const page = { bringToFront: vi.fn(async () => undefined) };
+
+      const result = promptComposer.attemptSendButton(
+        runtime as never,
+        input as never,
+        undefined,
+        undefined,
+        undefined,
+        page as never,
+      );
+      await vi.advanceTimersByTimeAsync(350);
+
+      await expect(result).resolves.toBe(true);
+      // Page.bringToFront activates Chrome on macOS and would steal the user's focus.
+      expect(page.bringToFront).not.toHaveBeenCalled();
+      expect(input.dispatchMouseEvent).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("activates the target before measuring fresh trusted-click coordinates", async () => {
     vi.useFakeTimers();
     try {
       const events: string[] = [];
       let activated = false;
       const runtime = {
-        evaluate: vi.fn(async () => {
+        evaluate: vi.fn(async ({ expression }: { expression: string }) => {
+          if (expression === "document.visibilityState") {
+            return { result: { value: activated ? "visible" : "hidden" } };
+          }
           events.push("measurePoint");
           return {
             result: {

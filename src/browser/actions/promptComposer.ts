@@ -671,7 +671,7 @@ async function attemptSendButton(
       }
     }
     if (!attachmentMenuChecked) {
-      await activatePageForTrustedInput(Page, logger);
+      await activatePageForTrustedInput(Page, Runtime, logger);
       activated = true;
       await dismissOpenComposerPlusMenu(Runtime, Input, logger);
       attachmentMenuChecked = true;
@@ -698,7 +698,7 @@ async function attemptSendButton(
     // Activating the target can trigger a final compositor/layout pass. Do it before
     // measuring the button so the trusted click never uses stale coordinates.
     if (!activated) {
-      await activatePageForTrustedInput(Page, logger);
+      await activatePageForTrustedInput(Page, Runtime, logger);
       activated = true;
     }
     const { result } = await Runtime.evaluate({ expression: script, returnByValue: true });
@@ -977,9 +977,19 @@ async function dismissOpenComposerPlusMenu(
 
 async function activatePageForTrustedInput(
   Page: ChromeClient["Page"] | undefined,
+  Runtime: ChromeClient["Runtime"],
   logger?: BrowserLogger,
 ): Promise<void> {
   if (!Page || typeof Page.bringToFront !== "function") {
+    return;
+  }
+  // On macOS Page.bringToFront also activates Chrome and takes keyboard focus from the
+  // user's app. A tab that already renders as visible accepts trusted input without it.
+  const visibility = await Runtime.evaluate({
+    expression: "document.visibilityState",
+    returnByValue: true,
+  }).catch(() => null);
+  if (visibility?.result?.value === "visible") {
     return;
   }
   await Page.bringToFront().catch((error: unknown) => {

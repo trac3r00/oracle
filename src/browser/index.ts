@@ -28,6 +28,7 @@ import {
   connectToRemoteChrome,
   connectWithNewTab,
   closeTab,
+  shouldOpenTabInBackgroundWindow,
   createChromePageTarget,
   ensureChromePageTargetAfterClose,
   closeBlankChromeTabs,
@@ -1153,12 +1154,14 @@ async function runBrowserModeInternal(
       } else {
         const strictTabIsolation = Boolean(manualLogin && reusedChrome);
         const devtoolsRetries = manualLogin ? 6 : 0;
+        const backgroundWindow = await shouldOpenTabInBackgroundWindow(config, userDataDir);
         const connection = await cancellation.acquire(
           () =>
             connectWithNewTab(chrome.port, logger, "about:blank", chromeHost, {
               fallbackToDefault: !strictTabIsolation,
               retries: devtoolsRetries,
               retryDelayMs: 500,
+              backgroundWindow,
             }),
           async (connection) => {
             await connection.client.close().catch(() => undefined);
