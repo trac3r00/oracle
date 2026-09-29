@@ -32,6 +32,30 @@ test("captures a new message when earlier turns unmount during submission", asyn
   expect(await readSubmittedPromptFingerprint(runtime, undefined)).toBeUndefined();
 });
 
+test("reads user message IDs from current message units", async () => {
+  const attributes = new Map([["data-content-search-unit-key", "fallback-turn-0:0:user"]]);
+  const unit = {
+    getAttribute: (name: string) => attributes.get(name) ?? null,
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+  };
+  const runtime = {
+    evaluate: async ({ expression }: { expression: string }) => ({
+      result: {
+        value: new Function("document", `return ${expression}`)({
+          querySelectorAll: (selector: string) =>
+            selector === "[data-content-search-unit-key]"
+              ? [unit]
+              : selector === '[data-message-author-role="user"]' &&
+                  attributes.get("data-message-author-role") === "user"
+                ? [unit]
+                : [],
+        }),
+      },
+    }),
+  } as unknown as ChromeClient["Runtime"];
+  expect(await readUserMessageIds(runtime)).toEqual(["fallback-turn-0:0:user"]);
+});
+
 test("waits for pre-existing user message IDs to hydrate", async () => {
   let calls = 0;
   const runtime = {

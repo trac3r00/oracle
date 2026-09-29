@@ -1,11 +1,13 @@
 import type { ChromeClient, BrowserLogger } from "../types.js";
 import {
   ANSWER_SELECTORS,
+  ASSISTANT_MARKDOWN_SELECTOR,
   ASSISTANT_ROLE_SELECTOR,
   CONVERSATION_TURN_SELECTOR,
   COPY_BUTTON_SELECTOR,
   FINISHED_ACTIONS_SELECTOR,
   STOP_BUTTON_SELECTORS,
+  TURN_WRAPPER_SELECTOR,
 } from "../constants.js";
 import { buildConversationTurnListExpression } from "../conversationTurns.js";
 import {
@@ -839,7 +841,9 @@ function buildCompletionVisibilityExpression(
       return false;
     }
 
-    if (lastAssistantTurn.querySelector('${FINISHED_ACTIONS_SELECTOR}')) return true;
+    // Current turn actions live in the div[data-turn-key] wrapper, outside the message unit.
+    const actionScope = lastAssistantTurn.closest?.('${TURN_WRAPPER_SELECTOR}') ?? lastAssistantTurn;
+    if (actionScope.querySelector('${FINISHED_ACTIONS_SELECTOR}')) return true;
     const markdowns = lastAssistantTurn.querySelectorAll('.markdown');
     return Array.from(markdowns).some((node) => (node.textContent || '').trim() === 'Done');
   })()`;
@@ -1136,7 +1140,8 @@ function buildResponseObserverExpression(
       }
       if (!lastAssistantTurn) return false;
       // Check for action buttons in this specific turn
-      if (lastAssistantTurn.querySelector(FINISHED_SELECTOR)) return true;
+      const actionScope = lastAssistantTurn.closest?.('${TURN_WRAPPER_SELECTOR}') ?? lastAssistantTurn;
+      if (actionScope.querySelector(FINISHED_SELECTOR)) return true;
       // Check for "Done" text in this turn's markdown
       const markdowns = lastAssistantTurn.querySelectorAll('.markdown');
       return Array.from(markdowns).some((n) => (n.textContent || '').trim() === 'Done');
@@ -1283,6 +1288,7 @@ function buildAssistantExtractor(functionName: string): string {
       expandCollapsibles(messageRoot);
       const preferred =
         (messageRoot.matches?.('.markdown') || messageRoot.matches?.('[data-message-content]') ? messageRoot : null) ||
+        messageRoot.querySelector('${ASSISTANT_MARKDOWN_SELECTOR}') ||
         messageRoot.querySelector('.markdown') ||
         messageRoot.querySelector('[data-message-content]') ||
         messageRoot.querySelector('[data-testid*="message"]') ||
@@ -1491,7 +1497,8 @@ function buildCopyExpression(meta: { messageId?: string | null; turnId?: string 
       const hint = ${JSON.stringify(meta ?? {})};
       if (hint?.messageId) {
         const node = document.querySelector('[data-message-id="' + hint.messageId + '"]');
-        const buttons = node ? Array.from(node.querySelectorAll('${COPY_BUTTON_SELECTOR}')) : [];
+        const scope = node?.closest?.('${TURN_WRAPPER_SELECTOR}') ?? node;
+        const buttons = scope ? Array.from(scope.querySelectorAll('${COPY_BUTTON_SELECTOR}')) : [];
         const button = buttons.at(-1) ?? null;
         if (button) {
           return button;
@@ -1521,7 +1528,7 @@ function buildCopyExpression(meta: { messageId?: string | null; turnId?: string 
       for (let i = turns.length - 1; i >= 0; i -= 1) {
         const turn = turns[i];
         if (!isAssistantTurn(turn)) continue;
-        const button = turn.querySelector(BUTTON_SELECTOR);
+        const button = (turn.closest?.('${TURN_WRAPPER_SELECTOR}') ?? turn).querySelector(BUTTON_SELECTOR);
         if (button) {
           return button;
         }

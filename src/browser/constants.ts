@@ -39,6 +39,12 @@ export const CONVERSATION_TURN_SELECTOR =
   "article[data-message-author-role], div[data-message-author-role], section[data-message-author-role], " +
   "article[data-turn], div[data-turn], section[data-turn]";
 export const CONVERSATION_TURN_CONTAINER_SELECTOR = '[data-testid^="conversation-turn"]';
+// ChatGPT (2026-09): an exchange is one div[data-turn-key] wrapper that can hold both the user
+// and the assistant message. Each message is a unit keyed "<turn>:<n>:user|assistant"; the turn
+// actions (Copy, Share, ...) sit in the wrapper, outside the units.
+export const TURN_WRAPPER_SELECTOR = "div[data-turn-key]";
+export const MESSAGE_UNIT_SELECTOR = "[data-content-search-unit-key]";
+export const ASSISTANT_MARKDOWN_SELECTOR = '[data-markdown-text-style="assistant-message"]';
 export const ASSISTANT_ROLE_SELECTOR =
   '[data-message-author-role="assistant"], [data-turn="assistant"]';
 export const CLOUDFLARE_SCRIPT_SELECTOR = 'script[src*="/challenge-platform/"]';
@@ -91,9 +97,12 @@ export const SEND_BUTTON_SELECTORS = [
 ];
 export const SEND_BUTTON_SELECTOR = SEND_BUTTON_SELECTORS[0];
 export const MODEL_BUTTON_SELECTOR =
-  '[data-testid="model-switcher-dropdown-button"], button.__composer-pill[aria-haspopup="menu"]';
+  '[data-testid="model-switcher-dropdown-button"], button.__composer-pill[aria-haspopup="menu"], ' +
+  'button[aria-label="Select ChatGPT model"][aria-haspopup="menu"]';
 export const COMPOSER_MODEL_SIGNAL_SELECTOR = '[data-testid="composer-footer-actions"]';
-export const COPY_BUTTON_SELECTOR = 'button[data-testid="copy-turn-action-button"]';
+// The assistant action is labelled exactly "Copy"; the user message's is "Copy message".
+export const COPY_BUTTON_SELECTOR =
+  'button[data-testid="copy-turn-action-button"], button[aria-label="Copy"]';
 // Action buttons that only appear once a turn has finished rendering.
 export const DEEP_RESEARCH_PLUS_BUTTON = '[data-testid="composer-plus-btn"]';
 export const DEEP_RESEARCH_DROPDOWN_ITEM_TEXT = "Deep research";
@@ -102,4 +111,4 @@ export const DEEP_RESEARCH_POLL_INTERVAL_MS = 5_000;
 export const DEEP_RESEARCH_AUTO_CONFIRM_WAIT_MS = 70_000;
 export const DEEP_RESEARCH_DEFAULT_TIMEOUT_MS = 2_400_000;
 export const FINISHED_ACTIONS_SELECTOR =
-  'button[data-testid="copy-turn-action-button"], button[data-testid="good-response-turn-action-button"], button[data-testid="bad-response-turn-action-button"], button[aria-label="Share"]';
+  'button[data-testid="copy-turn-action-button"], button[data-testid="good-response-turn-action-button"], button[data-testid="bad-response-turn-action-button"], button[aria-label="Share"], button[aria-label="Copy"]';

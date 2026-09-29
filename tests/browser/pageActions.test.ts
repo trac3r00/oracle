@@ -1743,7 +1743,11 @@ describe("waitForAssistantResponse", () => {
     expect(capturedExpression).toContain("characterData: true");
     expect(capturedExpression).toContain("copy-turn-action-button");
     expect(capturedExpression).toContain("isLastAssistantTurnFinished");
-    expect(capturedExpression).toContain("lastAssistantTurn.querySelector(FINISHED_SELECTOR)");
+    // Scoped to the last assistant turn (or its div[data-turn-key] wrapper), never the document.
+    expect(capturedExpression).toContain(
+      "const actionScope = lastAssistantTurn.closest?.('div[data-turn-key]') ?? lastAssistantTurn;",
+    );
+    expect(capturedExpression).toContain("actionScope.querySelector(FINISHED_SELECTOR)");
     expect(capturedExpression).not.toContain("document.querySelector(FINISHED_SELECTOR)");
     expect(capturedExpression).toContain("lastAssistantTurn.querySelectorAll('.markdown')");
     expect(capturedExpression).not.toContain("document.querySelectorAll('.markdown')");

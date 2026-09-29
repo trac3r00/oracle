@@ -14,7 +14,10 @@ export function readUserMessageIds(
 ): Promise<string[] | undefined> {
   return readDomUntil(
     runtime,
-    `Array.from(document.querySelectorAll('[data-message-author-role="user"]'), user => user.getAttribute('data-message-id'))`,
+    `(() => {
+      ${buildConversationTurnListExpression()};
+      return Array.from(document.querySelectorAll('[data-message-author-role="user"]'), user => user.getAttribute('data-message-id'));
+    })()`,
     timeoutMs,
     (value) =>
       Array.isArray(value) && value.every((id) => typeof id === "string" && id.trim())

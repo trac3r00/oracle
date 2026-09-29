@@ -6,6 +6,7 @@ import {
 import {
   CONVERSATION_TURN_CONTAINER_SELECTOR,
   CONVERSATION_TURN_SELECTOR,
+  MESSAGE_UNIT_SELECTOR,
 } from "../../src/browser/constants.js";
 
 function evaluate(expression: string, responses: Map<string, unknown[]>): unknown {
@@ -36,5 +37,33 @@ describe("conversation turn expressions", () => {
     ]);
 
     expect(evaluate(buildConversationTurnListExpression(), responses)).toEqual(legacyTurns);
+  });
+
+  test("returns current message units as role-tagged turns", () => {
+    const unit = (key: string) => {
+      const attributes = new Map([["data-content-search-unit-key", key]]);
+      return {
+        attributes,
+        getAttribute: (name: string) => attributes.get(name) ?? null,
+        setAttribute: (name: string, value: string) => attributes.set(name, value),
+      };
+    };
+    // One div[data-turn-key] wrapper holds both messages; the search unit is not a message.
+    const user = unit("fallback-turn-0:0:user");
+    const assistant = unit("fallback-turn-0:2:assistant");
+    const search = unit("fallback-turn-0:1:search");
+    const legacyTurns = [{ id: "stale-legacy-match" }];
+    const responses = new Map<string, unknown[]>([
+      [CONVERSATION_TURN_CONTAINER_SELECTOR, []],
+      [MESSAGE_UNIT_SELECTOR, [user, search, assistant]],
+      [CONVERSATION_TURN_SELECTOR, legacyTurns],
+    ]);
+
+    expect(evaluate(buildConversationTurnListExpression(), responses)).toEqual([user, assistant]);
+    expect(user.attributes.get("data-message-author-role")).toBe("user");
+    expect(user.attributes.get("data-message-id")).toBe("fallback-turn-0:0:user");
+    expect(assistant.attributes.get("data-message-author-role")).toBe("assistant");
+    expect(assistant.attributes.get("data-message-id")).toBe("fallback-turn-0:2:assistant");
+    expect(search.attributes.has("data-message-author-role")).toBe(false);
   });
 });
