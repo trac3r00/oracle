@@ -87,6 +87,9 @@ export interface BrowserSessionConfig {
   thinkingTime?: ThinkingTimeLevel;
   /** Browser-only research mode. "deep" activates ChatGPT Deep Research. */
   researchMode?: BrowserResearchMode;
+  composerTools?: string[];
+  libraryFiles?: string[];
+  sketch?: string | null;
   /** Archive completed ChatGPT conversations after local artifacts are saved. */
   archiveConversations?: BrowserArchiveMode;
   /** Browser-only: existing ChatGPT conversation URL to resume before submitting. */

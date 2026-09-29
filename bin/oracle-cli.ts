@@ -163,6 +163,9 @@ interface CliOptions extends OptionValues {
   browserThinkingTime?: "light" | "standard" | "extended" | "extra-high" | "pro" | "heavy";
   browserCaptureProviderNative?: boolean;
   browserResearch?: "off" | "search" | "deep";
+  browserTool?: string[];
+  browserLibraryFile?: string[];
+  browserSketch?: string;
   browserFollowUp?: string[];
   browserAllowCookieErrors?: boolean;
   browserAttachments?: string;
@@ -828,15 +831,27 @@ program
     new Option(
       "--browser-thinking-time <level>",
       "Thinking time intensity for Thinking/Pro models: light, standard, extended, extra-high (Extra High), pro (Pro tier of the active model), heavy, or ChatGPT UI aliases.",
-    )
-      .argParser(parseThinkingTimeOption)
-      .hideHelp(),
+    ).argParser(parseThinkingTimeOption),
   )
   .addOption(
     new Option(
       "--browser-research <mode>",
       "Browser research mode: search activates Web Search; deep activates Deep Research.",
     ).choices(["off", "search", "deep"]),
+  )
+  .option(
+    "--browser-tool <name>",
+    'Activate a ChatGPT "+" menu tool or plugin before sending, by its menu name (e.g. "Create image", "Web search", "Deep research", "Data", "GitHub"); repeatable. Fails with the available list when missing.',
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option(
+    "--browser-library-file <name>",
+    "Attach an existing ChatGPT library file by its name (extension optional); repeatable.",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option(
+    "--browser-sketch <strokes>",
+    'Draw strokes in ChatGPT Sketch and attach them: "x,y x,y; x,y x,y" with coordinates 0..1 (e.g. "0.1,0.1 0.9,0.9; 0.1,0.9 0.9,0.1").',
   )
   .option(
     "--browser-capture-provider-native",

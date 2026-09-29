@@ -4,6 +4,7 @@
 
 - Browser: warn when a configured Chrome executable cannot replace a running shared profile, explain how to switch safely, and share reuse handling with Project Sources; fixes #510, thanks @Sogl.
 - Browser: support ChatGPT's September 2026 layout — read `div[data-turn-key]` message units, the new assistant Markdown root and wrapper-level Copy/Share actions, and select models (Latest, GPT-5.6 Sol, GPT-5.5) and effort through the new Power picker; `--browser-hide-window` on macOS no longer brings Chrome to the front at launch or before sending.
+- Browser: use ChatGPT's composer tools on the September 2026 UI — `--browser-tool <name>` activates any "+" menu tool or plugin (Create image, Deep research, Data, GitHub, …) and fails with the available list when missing; `--browser-library-file <name>` attaches existing library files; `--browser-sketch` draws and attaches a sketch; `--browser-thinking-time` is now listed in help. Web search, Deep research, file uploads, and generated-image answers (saved via `--generate-image`) work with the new composer again.
 
 ## 0.21.3 - 2026-09-24
 

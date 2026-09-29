@@ -67,6 +67,9 @@ export const DEFAULT_BROWSER_CONFIG: ResolvedBrowserConfig = {
   manualLoginProfileDir: null,
   manualLoginCookieSync: false,
   researchMode: "off",
+  composerTools: [],
+  libraryFiles: [],
+  sketch: null,
   archiveConversations: "auto",
   resumeConversationUrl: null,
   captureProviderNative: false,
@@ -156,6 +159,9 @@ export function resolveBrowserConfig(
     thinkingTime: config?.thinkingTime,
     researchMode,
     archiveConversations,
+    composerTools: config?.composerTools ?? [],
+    libraryFiles: config?.libraryFiles ?? [],
+    sketch: config?.sketch ?? null,
     resumeConversationUrl:
       config?.resumeConversationUrl ?? DEFAULT_BROWSER_CONFIG.resumeConversationUrl,
     captureProviderNative:

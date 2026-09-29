@@ -129,6 +129,12 @@ export interface BrowserAutomationConfig {
   thinkingTime?: ThinkingTimeLevel;
   /** Browser-only research mode. "deep" activates ChatGPT Deep Research. */
   researchMode?: BrowserResearchMode;
+  /** ChatGPT "+" menu tools or plugins to activate before sending (e.g. "Create image", "Data"). */
+  composerTools?: string[];
+  /** Existing ChatGPT library files to attach by name. */
+  libraryFiles?: string[];
+  /** Sketch strokes to draw and attach (see parseSketchSpec). */
+  sketch?: string | null;
   /** Archive completed ChatGPT conversations after local artifacts are saved. */
   archiveConversations?: BrowserArchiveMode;
   /** Existing ChatGPT conversation URL to open before submitting the prompt. */
@@ -274,4 +280,7 @@ export type ResolvedBrowserConfig = Required<
   maxConcurrentTabs: number;
   researchMode: BrowserResearchMode;
   archiveConversations: BrowserArchiveMode;
+  composerTools: string[];
+  libraryFiles: string[];
+  sketch: string | null;
 };

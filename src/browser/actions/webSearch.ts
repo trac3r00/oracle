@@ -9,6 +9,7 @@ import {
 } from "./attachments.js";
 import { buildComposerNavigationValidationExpression } from "./attachmentContext.js";
 import { buildClickDispatcher } from "./domEvents.js";
+import { activateComposerTool, buildHasComposerToolMenuExpression } from "./composerTools.js";
 
 export function matchesWebSearchMenuLabel(value: string): boolean {
   return [
@@ -63,6 +64,14 @@ export async function activateWebSearch(
   prompt: string,
   logger: BrowserLogger,
 ): Promise<void> {
+  const composerToolMenu = await runtime.evaluate({
+    expression: buildHasComposerToolMenuExpression(),
+    returnByValue: true,
+  });
+  if (composerToolMenu?.result?.value === true) {
+    await activateComposerTool(runtime, "Web search", logger);
+    return;
+  }
   const navigationUrl = await captureComposerNavigationUrl(runtime);
   const verify = async () => {
     const { result, exceptionDetails } = await runtime.evaluate({

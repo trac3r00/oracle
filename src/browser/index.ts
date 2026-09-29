@@ -1643,6 +1643,9 @@ async function runBrowserModeInternal(
         attachmentNavigationUrl,
         onPromptSubmitted: markPromptSubmitted,
         webSearch: config.researchMode === "search",
+        composerTools: config.composerTools,
+        libraryFiles: config.libraryFiles,
+        sketch: config.sketch,
       };
       const deepResearchTargetBaseline =
         deepResearch && client
@@ -3242,6 +3245,9 @@ async function runRemoteBrowserMode(
         attachmentNavigationUrl,
         onPromptSubmitted: markPromptSubmitted,
         webSearch: config.researchMode === "search",
+        composerTools: config.composerTools,
+        libraryFiles: config.libraryFiles,
+        sketch: config.sketch,
       };
       const deepResearchTargetBaseline =
         deepResearch && client

@@ -97,6 +97,9 @@ export interface BrowserFlagOptions {
   /** Thinking time intensity: 'light', 'standard', 'extended', 'extra-high', 'pro', 'heavy' */
   browserThinkingTime?: ThinkingTimeLevel;
   browserResearch?: BrowserResearchMode;
+  browserTool?: string[];
+  browserLibraryFile?: string[];
+  browserSketch?: string;
   browserArchive?: BrowserArchiveMode;
   browserCaptureProviderNative?: boolean;
   browserModelLabel?: string;
@@ -365,6 +368,9 @@ export async function buildBrowserConfig(
         : "off",
     archiveConversations: options.browserArchive,
     captureProviderNative: options.browserCaptureProviderNative,
+    composerTools: options.browserTool?.length ? options.browserTool : undefined,
+    libraryFiles: options.browserLibraryFile?.length ? options.browserLibraryFile : undefined,
+    sketch: options.browserSketch ?? undefined,
   };
 }
 

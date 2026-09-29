@@ -19,8 +19,10 @@ import {
   throwIfAssistantUiError,
 } from "./assistantResponse.js";
 import { BrowserAutomationError } from "../../oracle/errors.js";
+import { activateComposerTool, buildHasComposerToolMenuExpression } from "./composerTools.js";
 
 type ActivateOutcome =
+  | { status: "composer-tool-menu" }
   | { status: "activated" }
   | { status: "already-active" }
   | { status: "plus-button-missing" }
@@ -45,6 +47,10 @@ export async function activateDeepResearch(
   const result = outcome.result?.value as ActivateOutcome | undefined;
 
   switch (result?.status) {
+    case "composer-tool-menu":
+      await activateComposerTool(Runtime, DEEP_RESEARCH_DROPDOWN_ITEM_TEXT, logger);
+      logger("Deep Research mode activated");
+      return;
     case "activated":
       logger("Deep Research mode activated");
       return;
@@ -1332,6 +1338,7 @@ function buildActivateDeepResearchExpression(): string {
   ]);
 
   return `(async () => {
+    if (${buildHasComposerToolMenuExpression()}) return { status: 'composer-tool-menu' };
     ${buildClickDispatcher()}
     ${buildFindDeepResearchPillExpression()}
 

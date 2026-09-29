@@ -28,6 +28,7 @@ import { BrowserAutomationError } from "../../oracle/errors.js";
 import { buildAttachmentEvidenceExpression } from "./attachmentEvidence.js";
 import { buildAttachmentProgressExpression } from "./attachmentProgress.js";
 import { activateWebSearch } from "./webSearch.js";
+import { activateComposerTool, attachLibraryFiles, attachSketch } from "./composerTools.js";
 
 const ENTER_KEY_EVENT = {
   key: "Enter",
@@ -62,11 +63,16 @@ export async function submitPrompt(
     attachmentTimeoutMs?: number | null;
     onPromptSubmitted?: () => Promise<void> | void;
     webSearch?: boolean;
+    composerTools?: string[];
+    libraryFiles?: string[];
+    sketch?: string | null;
   },
   prompt: string,
   logger: BrowserLogger,
 ): Promise<number | null> {
   const { runtime, input } = deps;
+  // Opening ChatGPT's Sketch editor clears the composer text, so attach it before typing.
+  if (deps.sketch) await attachSketch(runtime, input, deps.sketch, logger);
   const hasAttachments = Array.isArray(deps.attachmentNames) && deps.attachmentNames.length > 0;
   if (hasAttachments && !deps.attachmentNavigationUrl) {
     throw new BrowserAutomationError(
@@ -254,6 +260,8 @@ export async function submitPrompt(
   }
 
   if (deps.webSearch) await activateWebSearch(runtime, input, prompt, logger);
+  if (deps.libraryFiles?.length) await attachLibraryFiles(runtime, deps.libraryFiles, logger);
+  for (const tool of deps.composerTools ?? []) await activateComposerTool(runtime, tool, logger);
 
   const clicked = await attemptSendButton(
     runtime,
@@ -455,6 +463,8 @@ function buildAttachmentReadyExpression(attachmentNames: AttachmentReadyInput[])
     const attachmentSelectors = [
       // Current ChatGPT file tiles expose the filename through a role-group aria label.
       '[role="group"][aria-label]',
+      // ChatGPT 2026-09: tiles are plain children of the composer's attachment strip.
+      '[data-composer-attachments] > *',
       '[data-testid*="chip"]',
       '[data-testid*="attachment"]',
       '[data-testid*="upload"]',
@@ -766,7 +776,7 @@ async function activateExactAttachmentSendButton(
 ): Promise<boolean> {
   const probe = await Runtime.evaluate({
     expression: `(() => {
-      const button = document.querySelector('button[data-testid="send-button"]');
+      const button = document.querySelector('button[data-testid="send-button"], button[aria-label="Send"]');
       if (!(button instanceof HTMLElement)) return { status: 'absent' };
       const rect = button.getBoundingClientRect();
       const style = window.getComputedStyle(button);
@@ -808,7 +818,7 @@ async function activateExactAttachmentSendButton(
   try {
     const boundary = await Runtime.evaluate({
       expression: `(() => {
-        const button = document.querySelector('button[data-testid="send-button"]');
+        const button = document.querySelector('button[data-testid="send-button"], button[aria-label="Send"]');
         const check = () => {
           const navigation = ${buildComposerNavigationValidationExpression(attachmentNavigationUrl)};
           const rect = button?.getBoundingClientRect();
@@ -816,7 +826,7 @@ async function activateExactAttachmentSendButton(
           return {
             ...navigation,
             focused: button instanceof HTMLElement && document.activeElement === button &&
-              document.querySelector('button[data-testid="send-button"]') === button &&
+              document.querySelector('button[data-testid="send-button"], button[aria-label="Send"]') === button &&
               !button.hasAttribute('disabled') && button.getAttribute('aria-disabled') !== 'true' &&
               button.getAttribute('data-disabled') !== 'true' && rect.width > 0 && rect.height > 0 &&
               style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none',
@@ -852,7 +862,7 @@ async function activateExactAttachmentSendButton(
         };
         const onClick = event => {
           if (!guard.sawKeyDown || !(event.target instanceof Node) ||
-              !(button.contains(event.target) || event.target instanceof Element && event.target.closest('button[data-testid="send-button"]'))) return;
+              !(button.contains(event.target) || event.target instanceof Element && event.target.closest('button[data-testid="send-button"], button[aria-label="Send"]'))) return;
           const state = safeCheck();
           if (guard.blocked || !state.contextMatches || !state.focused || !state.attachmentsReady) cancel(event, guard.blocked ?? state);
           detach();
@@ -922,7 +932,7 @@ async function dismissOpenComposerPlusMenu(
 ): Promise<boolean> {
   const probe = await Runtime.evaluate({
     expression: `(() => {
-      const selectors = ['#composer-plus-btn', 'button[data-testid="composer-plus-btn"]'];
+      const selectors = ['#composer-plus-btn', 'button[data-testid="composer-plus-btn"]', 'button[aria-label="Add files and more"]'];
       const button = selectors
         .map(selector => document.querySelector(selector))
         .find(node => node instanceof HTMLElement && node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0);
@@ -953,7 +963,7 @@ async function dismissOpenComposerPlusMenu(
   while (Date.now() < deadline) {
     const state = await Runtime.evaluate({
       expression: `(() => {
-        const selectors = ['#composer-plus-btn', 'button[data-testid="composer-plus-btn"]'];
+        const selectors = ['#composer-plus-btn', 'button[data-testid="composer-plus-btn"]', 'button[aria-label="Add files and more"]'];
         return !selectors.some(selector =>
           document.querySelector(selector)?.getAttribute?.('aria-expanded') === 'true'
         );
