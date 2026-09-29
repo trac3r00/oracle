@@ -429,7 +429,16 @@ function buildModelSelectionExpression(
       } catch {}
     };
 
-    const getButtonLabel = () => (findModelButton()?.textContent ?? '').trim();
+    // The current pill carries an aria-hidden width-measurement copy ("Thinking effort")
+    // next to its visible label; only the visible text names the selection.
+    const getButtonLabel = () => {
+      const node = findModelButton();
+      if (!node) return '';
+      if (!node.querySelector?.('[aria-hidden="true"]')) return (node.textContent ?? '').trim();
+      const clone = node.cloneNode(true);
+      for (const hidden of clone.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+      return (clone.textContent ?? '').trim();
+    };
     // With the picker closed the only evidence for "Latest" is the composer pill, so a version-less
     // "latest" target must be decided on it: the blank composer signal would otherwise pass as
     // "already selected" while GPT-5.6 Sol is active. Defined here, before getResolvedLabel, because
@@ -846,6 +855,117 @@ function buildModelSelectionExpression(
         lastPointerClick = performance.now();
       }
     };
+
+    // ---------- Power picker (ChatGPT 2026-09) ----------
+    // The composer button opens one menu with a "Select model" header, a reasoning "Power"
+    // slider and the model radios (Latest, GPT-5.6 Sol, GPT-5.5). The pill names only the
+    // effort, so the checked radio is the model evidence. Effort is left to thinkingTime.
+    const POWER_SLIDER_SELECTOR = '[data-reasoning-slider="true"], [data-model-picker-power-slider]';
+    const findPowerPickerMenu = () => {
+      for (const menu of document.querySelectorAll('[role="menu"]')) {
+        const slider = menu.querySelector?.(POWER_SLIDER_SELECTOR);
+        if (
+          slider?.getAttribute?.('data-reasoning-slider') !== 'true' &&
+          !slider?.hasAttribute?.('data-model-picker-power-slider')
+        ) {
+          continue;
+        }
+        const labelledBy = menu.getAttribute?.('aria-labelledby');
+        if (button.id && labelledBy && labelledBy !== button.id) continue;
+        return menu;
+      }
+      return null;
+    };
+    const powerPickerModelName = (radio) => {
+      const row = radio.querySelector('[data-menu-row-content]') ?? radio;
+      return (row.querySelector('span')?.textContent ?? row.textContent ?? '').trim();
+    };
+    const powerPickerEffortLabel = (menu) => {
+      const control = menu.querySelector('[data-reasoning-slider="true"]');
+      const ids = (control?.getAttribute('aria-describedby') ?? '').split(/\\s+/).filter(Boolean);
+      const description = ids.length ? (document.getElementById(ids[0])?.textContent ?? '') : '';
+      return description.split(',')[0].trim();
+    };
+    const powerPickerRadioMatchesTarget = (name) => {
+      if (targetIsLatest) return isLatestModelLabel(name);
+      const version = /^GPT-(\\d+)\\.(\\d+)/i.exec(name);
+      if (!desiredVersion || !version || version[1] + '-' + version[2] !== desiredVersion) {
+        return false;
+      }
+      const words = normalizeText(name).split(' ');
+      return desiredModelVariant ? words.includes(desiredModelVariant) : !words.includes('sol');
+    };
+    const closePowerPicker = () =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }),
+      );
+    const selectFromPowerPicker = () =>
+      new Promise((resolve) => {
+        const startedAt = performance.now();
+        let lastOpenAttempt = -Infinity;
+        let clickedRadio = false;
+        let menuSeen = false;
+        const tick = () => {
+          const expired = performance.now() - startedAt > MAX_WAIT_MS;
+          const menu = findPowerPickerMenu();
+          if (!menu) {
+            if (expired) {
+              resolve(menuSeen ? { status: 'option-not-found', hint: { availableOptions: [] } } : null);
+              return;
+            }
+            if (performance.now() - lastOpenAttempt > REOPEN_INTERVAL_MS) {
+              lastOpenAttempt = performance.now();
+              pointerClick();
+            }
+            setTimeout(tick, 100);
+            return;
+          }
+          menuSeen = true;
+          const radios = Array.from(menu.querySelectorAll('[role="menuitemradio"]'));
+          const target = radios.find((radio) =>
+            powerPickerRadioMatchesTarget(powerPickerModelName(radio)),
+          );
+          if (!target) {
+            if (radios.length === 0 && !expired) {
+              setTimeout(tick, 100);
+              return;
+            }
+            closePowerPicker();
+            resolve({
+              status: 'option-not-found',
+              hint: { availableOptions: radios.map(powerPickerModelName) },
+            });
+            return;
+          }
+          if (target.getAttribute('aria-checked') === 'true') {
+            const name = powerPickerModelName(target);
+            const effort = powerPickerEffortLabel(menu);
+            closePowerPicker();
+            resolve({
+              status: clickedRadio ? 'switched' : 'already-selected',
+              label: wantsPro && effort ? name + ' ' + effort : name,
+            });
+            return;
+          }
+          if (expired) {
+            closePowerPicker();
+            resolve({
+              status: 'option-not-found',
+              hint: { availableOptions: radios.map(powerPickerModelName) },
+            });
+            return;
+          }
+          if (!clickedRadio) {
+            clickedRadio = true;
+            dispatchClickSequence(target);
+          }
+          setTimeout(tick, 150);
+        };
+        tick();
+      });
+    if (button.hasAttribute?.('data-codex-intelligence-trigger') || findPowerPickerMenu()) {
+      return selectFromPowerPicker().then((result) => result ?? { status: 'button-missing' });
+    }
 
     const getOptionLabel = (node) => node?.textContent?.trim() ?? '';
     const isDetachedProEffortMenu = (menu) => {

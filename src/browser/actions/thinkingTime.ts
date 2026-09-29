@@ -311,6 +311,7 @@ function buildThinkingTimeExpression(
 
     const MENU_CONTAINER_SELECTOR = ${menuContainerLiteral};
     const MENU_ITEM_SELECTOR = ${menuItemLiteral};
+    const POWER_SLIDER_ROW_SELECTOR = '[role="menuitem"][data-reasoning-slider="true"]';
     const MODEL_BUTTON_SELECTOR = ${modelButtonLiteral};
     const TARGET_LEVEL = ${targetLevelLiteral};
     const TARGET_MODEL_KIND = ${targetModelKindLiteral};
@@ -1099,17 +1100,26 @@ function buildThinkingTimeExpression(
     // The direct-slider rollout removes the Effort submenu entirely. Its keyboard
     // owner announces the actual tier via aria-describedby; neither the pill nor
     // the slider's maximum position alone proves that Pro was selected.
-    const selectDirectEffortSlider = async (menu) => {
+    const findEffortSlider = (menu) => {
       const view = menu.querySelector?.('[data-model-selection-view="true"]');
       const simple = view?.querySelector?.('[data-testid="composer-model-picker-slider-simple-view"]');
-      if (!simple || simple.getAttribute('data-active') !== 'true' || !isVisible(simple)) return null;
+      if (simple) {
+        if (simple.getAttribute('data-active') !== 'true' || !isVisible(simple)) return null;
+        const slider = simple.querySelector('[data-model-reasoning-effort-slider]');
+        return {
+          control: slider?.closest?.('[role="menuitem"]') ?? null,
+          thumb: slider?.querySelector?.('[role="slider"]') ?? null,
+        };
+      }
+      // ChatGPT 2026-09: the "Power" slider row sits directly in the model menu.
+      const control = menu.querySelector?.(POWER_SLIDER_ROW_SELECTOR);
+      if (control?.getAttribute?.('data-reasoning-slider') !== 'true') return null;
+      return { control, thumb: control.querySelector?.('[role="slider"]') ?? null };
+    };
+    const selectDirectEffortSlider = async (menu) => {
+      if (!findEffortSlider(menu)) return null;
       const resolve = () => {
-        const currentView = menu.querySelector?.('[data-model-selection-view="true"]');
-        const currentSimple = currentView?.querySelector?.('[data-testid="composer-model-picker-slider-simple-view"]');
-        if (currentSimple?.getAttribute('data-active') !== 'true') return null;
-        const slider = currentSimple.querySelector('[data-model-reasoning-effort-slider]');
-        const control = slider?.closest?.('[role="menuitem"]');
-        const thumb = slider?.querySelector?.('[role="slider"]');
+        const { control, thumb } = findEffortSlider(menu) ?? {};
         if (!control || !thumb || !isVisible(control)) return null;
         const levels = ['light', 'standard', 'extended', 'extra-high', 'pro'];
         // The selected label leads localized aria-describedby prose, while punctuation
@@ -1441,6 +1451,22 @@ function buildThinkingTimeExpression(
     ) {
       dispatchClickSequence(modelBtn);
       await sleep(INITIAL_WAIT_MS);
+    }
+
+    // ChatGPT 2026-09: the model button opens one menu whose "Power" slider owns the effort.
+    if (modelBtn.hasAttribute?.('data-codex-intelligence-trigger')) {
+      const powerDeadline = performance.now() + MAX_WAIT_MS;
+      while (performance.now() < powerDeadline) {
+        const menu = Array.from(document.querySelectorAll(MENU_CONTAINER_SELECTOR)).find(
+          (candidate) => isVisible(candidate) && candidate.querySelector(POWER_SLIDER_ROW_SELECTOR),
+        );
+        if (menu) {
+          const sliderResult = await selectDirectEffortSlider(menu);
+          if (sliderResult) return sliderResult;
+          break;
+        }
+        await sleep(100);
+      }
     }
 
     // ---------- COMPATIBILITY UI: unified "Intelligence" effort picker ----------
